@@ -18,6 +18,9 @@ import requests
 
 load_dotenv()
 
+app = FastAPI()
+
+
 fertilizer_map = {
     0: "10-26-26",
     1: "14-35-14",
@@ -120,9 +123,6 @@ def get_fertilizer_prediction(data):
 
 
 if __name__ == "__main__":
-    
-    app = FastAPI()
-
     @app.get("/")
     def home():
         return {"message": "As you can see, I'm Not Dead!"}
@@ -165,5 +165,3 @@ if __name__ == "__main__":
         prediction = fertilizer_map[get_fertilizer_prediction(data)]
         print("Prediction : ",prediction)
         return JSONResponse(content={"Response": "Function completed"})
-
-    uvicorn.run(app, host="localhost", port=8000)
