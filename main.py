@@ -122,46 +122,45 @@ def get_fertilizer_prediction(data):
     return prediction[0]
 
 
-if __name__ == "__main__":
-    @app.get("/")
-    def home():
-        return {"message": "As you can see, I'm Not Dead!"}
+@app.get("/")
+def home():
+    return {"message": "As you can see, I'm Not Dead!"}
 
-    @app.post("/fertilizer-prediction/")
-    async def predict_fertilizer(
-        file : UploadFile = File(...),
-        lat: float = Query(..., description="Latitude of the location"),
-        lon: float = Query(..., description="Longitude of the location"),
-        crop_type: str = Query(..., description="Type of the crop")
-        ):
+@app.post("/fertilizer-prediction/")
+async def predict_fertilizer(
+    file : UploadFile = File(...),
+    lat: float = Query(..., description="Latitude of the location"),
+    lon: float = Query(..., description="Longitude of the location"),
+    crop_type: str = Query(..., description="Type of the crop")
+    ):
 
-        # print(f"file : {file} lat : {lat} lon: {lon} crop : {crop_type}")
-        content = await file.read()
-        soil_data = get_soil_data(content)
-        print(f"soil data: {soil_data}")
+    # print(f"file : {file} lat : {lat} lon: {lon} crop : {crop_type}")
+    content = await file.read()
+    soil_data = get_soil_data(content)
+    print(f"soil data: {soil_data}")
 
-        soil_type = soil_data["soil_type"]
-        n = soil_data["N"]
-        p = soil_data["P"]
-        k = soil_data["K"]
+    soil_type = soil_data["soil_type"]
+    n = soil_data["N"]
+    p = soil_data["P"]
+    k = soil_data["K"]
 
-        weather_data = get_weather([lat, lon])
-        t = weather_data['Temperature']
-        h = weather_data['Humidity']
-        m = weather_data['Moisture']
+    weather_data = get_weather([lat, lon])
+    t = weather_data['Temperature']
+    h = weather_data['Humidity']
+    m = weather_data['Moisture']
 
-        data = {
-            "Temperature": [t],
-            "Humidity": [h],
-            "Moisture": [m],
-            "Soil Type": [soil_type],
-            "Crop Type": [crop_type],
-            "Nitrogen": [n],
-            "Potassium": [k],
-            "Phosphorous": [p],
-        }
-        print(f"data : {data}")
-        # df = pd.DataFrame(data)
-        prediction = fertilizer_map[get_fertilizer_prediction(data)]
-        print("Prediction : ",prediction)
-        return JSONResponse(content={"Response": "Function completed"})
+    data = {
+    "Temperature": [t],
+    "Humidity": [h],
+    "Moisture": [m],
+    "Soil Type": [soil_type],
+    "Crop Type": [crop_type],
+    "Nitrogen": [n],
+    "Potassium": [k],
+    "Phosphorous": [p],
+    }
+    print(f"data : {data}")
+    # df = pd.DataFrame(data)
+    prediction = fertilizer_map[get_fertilizer_prediction(data)]
+    print("Prediction : ",prediction)
+    return JSONResponse(content={"Response": "Function completed"})
