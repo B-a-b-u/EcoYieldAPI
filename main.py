@@ -163,4 +163,4 @@ async def predict_fertilizer(
     # df = pd.DataFrame(data)
     prediction = fertilizer_map[get_fertilizer_prediction(data)]
     print("Prediction : ",prediction)
-    return JSONResponse(content={"Response": "Function completed"})
+    return JSONResponse(content={"Response": "Function completed","FR":prediction})
