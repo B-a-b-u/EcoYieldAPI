@@ -19,8 +19,13 @@ import requests
 load_dotenv()
 
 app = FastAPI()
-
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],  
+    allow_headers=["*"], 
+)
 fertilizer_map = {
     0: "10-26-26",
     1: "14-35-14",
