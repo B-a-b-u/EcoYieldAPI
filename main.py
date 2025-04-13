@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Annotated
 import uvicorn
 import pandas
 import pdfplumber
@@ -16,6 +15,7 @@ from dotenv import load_dotenv
 import pickle
 import os
 import requests
+import base64
 
 load_dotenv()
 
@@ -36,6 +36,11 @@ fertilizer_map = {
     5: "DAP",
     6: "Urea",
 }
+
+class PDFRequest(BaseModel):
+    base64_pdf: str
+    crop: str
+    location: str
 
 def get_soil_data(content):
     pdf_file = io.BytesIO(content)
@@ -129,17 +134,16 @@ def get_fertilizer_prediction(data):
 
 
 @app.post("/upload-pdf/")
-async def upload_pdf(file: Annotated[UploadFile, File(...)]):
-    if not file.filename.endswith(".pdf"):
-      return {"error": "Only PDF files are allowed."}
-    print("Received PDF file:", file.filename)
-    content = await file.read()
-    pdf_file = io.BytesIO(content)
-    extracted_values = dict()
-    with pdfplumber.open(pdf_file) as file:
-      text = file.pages[0].extract_text()
-      print(f"text from pdf : {text}")
-    return {"pdf_base64": "completed"}
+async def upload_pdf(payload: PDFRequest):
+    try:
+        pdf_bytes = base64.b64decode(payload.base64_pdf)
+        pdf_file = io.BytesIO(content)
+        extracted_values = dict()
+        with pdfplumber.open(pdf_file) as file:
+            text = file.pages[0].extract_text()
+            print(f"text : {text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
     
 @app.get("/")
 def home():
