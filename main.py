@@ -128,16 +128,16 @@ def get_fertilizer_prediction(data):
 
 
 @app.post("/upload-pdf/")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(file: Annotated[UploadFile, File(...)]):
     if not file.filename.endswith(".pdf"):
       return {"error": "Only PDF files are allowed."}
+    print("Received PDF file:", file.filename)
     content = await file.read()
     pdf_file = io.BytesIO(content)
     extracted_values = dict()
     with pdfplumber.open(pdf_file) as file:
       text = file.pages[0].extract_text()
       print(f"text from pdf : {text}")
-
     return {"pdf_base64": "completed"}
     
 @app.get("/")
