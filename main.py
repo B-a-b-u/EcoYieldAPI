@@ -125,8 +125,14 @@ def get_fertilizer_prediction(data):
         prediction = model.predict(preprocessed_data)
         print("Recommended Fertilizer:", prediction[0])
     return prediction[0]
+@app.post("/upload-pdf/")
+async def upload_pdf(file: UploadFile = File(...)):
+    if not file.filename.endswith(".pdf"):
+        return {"error": "Only PDF files are allowed."}
 
-
+    # Read file into memory
+    contents = await file.read()
+    return {"pdf data : ":contents}
 @app.get("/")
 def home():
     return {"message": "As you can see, I'm Not Dead!"}
