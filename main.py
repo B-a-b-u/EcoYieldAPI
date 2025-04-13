@@ -129,9 +129,8 @@ def get_fertilizer_prediction(data):
 
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
-     if not file.filename.endswith(".pdf"):
-        return {"error": "Only PDF files are allowed."}
-
+    if not file.filename.endswith(".pdf"):
+      return {"error": "Only PDF files are allowed."}
     content = await file.read()
     pdf_file = io.BytesIO(content)
     extracted_values = dict()
