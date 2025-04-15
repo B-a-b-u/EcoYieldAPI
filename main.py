@@ -92,24 +92,24 @@ def get_soil_data(content):
     return extracted_values
 
 
-# def get_weather(location):
-#     api_url = f"http://api.weatherapi.com/v1/forecast.json?key={os.getenv('WEATHER_MAP_API')}&q={location[0]},{location[1]}&days=1&aqi=no&alerts=no"
-#     print(api_url)
-#     response = requests.get(api_url)
-#     if response.status_code != 200:
-#         raise HTTPException(status_code=response.status_code, detail="Error fetching weather data")
-#     weather_data = response.json()
-#     current_weather = weather_data.get('current', {})
-#     temperature = current_weather.get('temp_c', None)
-#     humidity = current_weather.get('humidity', None)
-#     precipitation = current_weather.get('precip_mm', None)
-#     data = {
-#         'Temperature': temperature,
-#         'Humidity': humidity,
-#         'Moisture': precipitation
-#     }
-#     print(data)
-#     return data
+def get_weather(location):
+    api_url = f"http://api.weatherapi.com/v1/forecast.json?key={os.getenv('WEATHER_MAP_API')}&q={location[0]},{location[1]}&days=1&aqi=no&alerts=no"
+    print(api_url)
+    response = requests.get(api_url)
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail="Error fetching weather data")
+    weather_data = response.json()
+    current_weather = weather_data.get('current', {})
+    temperature = current_weather.get('temp_c', None)
+    humidity = current_weather.get('humidity', None)
+    precipitation = current_weather.get('precip_mm', None)
+    data = {
+        'Temperature': temperature,
+        'Humidity': humidity,
+        'Moisture': precipitation
+    }
+    print(data)
+    return data
 
 # print(get_weather("Coimbatore"))
 
