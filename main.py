@@ -150,7 +150,7 @@ def get_fertilizer_prediction(data):
         print("Recommended Fertilizer:", prediction[0])
     return prediction[0]
 
-@app.post("/upload-pdf/")
+
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
     contents = await file.read()
