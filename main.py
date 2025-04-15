@@ -6,6 +6,7 @@ import base64
 import pandas
 import pdfplumber
 import uvicorn
+from PyPDF2 import PdfReader
 import pandas as pd
 import io
 from pydantic import BaseModel
@@ -24,10 +25,10 @@ load_dotenv()
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  
-    allow_headers=["*"], 
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 fertilizer_map = {
     0: "10-26-26",
@@ -115,7 +116,7 @@ def get_soil_data(content):
 def load_cr_model():
   with open("models/CropRecommendation.pkl", "rb") as model_file:
     model = pickle.load(model_file, fix_imports=True)
-  with open("encoders/label_encoder.pkl", "rb") as f:
+  with open("models\label_encoder.pkl", "rb") as f:
     label_encoder = pickle.load(f)
     return (model, label_encoder)
 
@@ -150,31 +151,21 @@ def get_fertilizer_prediction(data):
     return prediction[0]
 
 @app.post("/upload-pdf/")
-async def upload_pdf(payload: PDFRequest):
-    try:
-        # Decode the base64 PDF
-        pdf_bytes = base64.b64decode(payload.base64_pdf)
-        pdf_file = io.BytesIO(pdf_bytes)
+@app.post("/upload-pdf/")
+async def upload_pdf(file: UploadFile = File(...)):
+    contents = await file.read()
 
-        extracted_values = {}
+    # Save it temporarily
+    with open("temp.pdf", "wb") as f:
+        f.write(contents)
 
-        with pdfplumber.open(pdf_file) as pdf:
-            for i, page in enumerate(pdf.pages):
-                text = page.extract_text()
-                if text:
-                    extracted_values[f"page_{i+1}"] = text
-                else:
-                    extracted_values[f"page_{i+1}"] = "No text found"
+    # Extract PDF text
+    reader = PdfReader("temp.pdf")
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() or ""
 
-        return {
-            "status": "success",
-            "extracted_text": extracted_values
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
-
-
+    return {"filename": file.filename, "content": text[:500]}  # Just return first 500 chars
 
 @app.get("/")
 def home():
