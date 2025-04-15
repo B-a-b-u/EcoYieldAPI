@@ -2,11 +2,13 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import base64
 import pandas
 import pdfplumber
 import uvicorn
 import pandas as pd
 import io
+from pydantic import BaseModel
 import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, MinMaxScaler
@@ -39,8 +41,16 @@ fertilizer_map = {
 
 class PDFRequest(BaseModel):
     base64_pdf: str
-    crop: str
-    location: str
+
+
+class CropInput(BaseModel):
+    N: float
+    P: float
+    K: float
+    temperature: float
+    humidity: float
+    ph: float
+    rainfall: float
 
 def get_soil_data(content):
     pdf_file = io.BytesIO(content)
@@ -81,26 +91,33 @@ def get_soil_data(content):
     return extracted_values
 
 
-def get_weather(location):
-    api_url = f"http://api.weatherapi.com/v1/forecast.json?key={os.getenv('WEATHER_MAP_API')}&q={location[0]},{location[1]}&days=1&aqi=no&alerts=no"
-    print(api_url)
-    response = requests.get(api_url)
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail="Error fetching weather data")
-    weather_data = response.json()
-    current_weather = weather_data.get('current', {})
-    temperature = current_weather.get('temp_c', None)
-    humidity = current_weather.get('humidity', None)
-    precipitation = current_weather.get('precip_mm', None)
-    data = {
-        'Temperature': temperature,
-        'Humidity': humidity,
-        'Moisture': precipitation
-    }
-    print(data)
-    return data
+# def get_weather(location):
+#     api_url = f"http://api.weatherapi.com/v1/forecast.json?key={os.getenv('WEATHER_MAP_API')}&q={location[0]},{location[1]}&days=1&aqi=no&alerts=no"
+#     print(api_url)
+#     response = requests.get(api_url)
+#     if response.status_code != 200:
+#         raise HTTPException(status_code=response.status_code, detail="Error fetching weather data")
+#     weather_data = response.json()
+#     current_weather = weather_data.get('current', {})
+#     temperature = current_weather.get('temp_c', None)
+#     humidity = current_weather.get('humidity', None)
+#     precipitation = current_weather.get('precip_mm', None)
+#     data = {
+#         'Temperature': temperature,
+#         'Humidity': humidity,
+#         'Moisture': precipitation
+#     }
+#     print(data)
+#     return data
 
-print(get_weather("Coimbatore"))
+# print(get_weather("Coimbatore"))
+
+def load_cr_model():
+  with open("models/CropRecommendation.pkl", "rb") as model_file:
+    model = pickle.load(model_file, fix_imports=True)
+  with open("encoders/label_encoder.pkl", "rb") as f:
+    label_encoder = pickle.load(f)
+    return (model, label_encoder)
 
 
 def preprocess_data(data):
@@ -132,22 +149,45 @@ def get_fertilizer_prediction(data):
         print("Recommended Fertilizer:", prediction[0])
     return prediction[0]
 
-
 @app.post("/upload-pdf/")
 async def upload_pdf(payload: PDFRequest):
     try:
+        # Decode the base64 PDF
         pdf_bytes = base64.b64decode(payload.base64_pdf)
-        pdf_file = io.BytesIO(content)
-        extracted_values = dict()
-        with pdfplumber.open(pdf_file) as file:
-            text = file.pages[0].extract_text()
-            print(f"text : {text}")
+        pdf_file = io.BytesIO(pdf_bytes)
+
+        extracted_values = {}
+
+        with pdfplumber.open(pdf_file) as pdf:
+            for i, page in enumerate(pdf.pages):
+                text = page.extract_text()
+                if text:
+                    extracted_values[f"page_{i+1}"] = text
+                else:
+                    extracted_values[f"page_{i+1}"] = "No text found"
+
+        return {
+            "status": "success",
+            "extracted_text": extracted_values
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
-    
+
+
+
 @app.get("/")
 def home():
     return {"message": "As you can see, I'm Not Dead!"}
+
+
+@app.post("/crop-prediction")
+def predict_crop(data: CropInput):
+    model, label_encoder = load_cr_model()
+    input_array = np.array([[data.N, data.P, data.K, data.temperature, data.humidity, data.ph, data.rainfall]])
+    prediction = model.predict(input_array)
+    crop_name = label_encoder.inverse_transform(prediction)[0]
+    return {"recommended_crop": crop_name}
 
 @app.post("/fertilizer-prediction/")
 async def predict_fertilizer(
