@@ -34,14 +34,14 @@ fertilizer_map = {
     3: "20-20", 4: "28-28", 5: "DAP", 6: "Urea",
 }
 
-class CropInput(BaseModel):
-    N: float
-    P: float
-    K: float
-    temperature: float
-    humidity: float
-    ph: float
-    rainfall: float
+# class CropInput(BaseModel):
+#     N: float
+#     P: float
+#     K: float
+#     temperature: float
+#     humidity: float
+#     ph: float
+#     rainfall: float
 
 @app.on_event("startup")
 def load_models():
@@ -58,8 +58,10 @@ def load_models():
         crop_encoder = pickle.load(f)
 
 
-def predict_crop_from_input(data: CropInput):
-    input_array = np.array([[data.N, data.P, data.K, data.temperature, data.humidity, data.ph, data.rainfall]])
+def predict_crop_from_input(data):
+    input_array = np.array([[ data["N"], data["P"], data["K"],
+        data["temperature"], data["humidity"],
+        data["ph"], data["rainfall"]]])
     prediction = crop_model.predict(input_array)
     return label_encoder.inverse_transform(prediction)[0]
 
@@ -89,15 +91,24 @@ def get_soil_data(content):
 
 def get_weather(location):
     lat, lon = location
-    api_url = f"http://api.weatherapi.com/v1/forecast.json?key={os.getenv('WEATHER_MAP_API')}&q={lat},{lon}&days=1&aqi=no&alerts=no"
+    api_url = f"http://api.weatherapi.com/v1/forecast.json?key=6bac00c67d4144e5ad2180607240809&q={lat},{lon}&days=1&aqi=no&alerts=no"
     res = requests.get(api_url)
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code, detail="Weather API failed")
-    data = res.json()["current"]
+    data = res.json()
+    try:
+        temperature = data["current"]["temp_c"]
+        humidity = data["current"]["humidity"]
+        moisture = data["current"]["precip_mm"]
+        rainfall = data["forecast"]["forecastday"][0]["day"].get("totalprecip_mm", 0.0)
+    except KeyError as e:
+        raise HTTPException(status_code=500, detail=f"Weather data format error: {e}")
+
     return {
-        "Temperature": data["temp_c"],
-        "Humidity": data["humidity"],
-        "Moisture": data["precip_mm"]
+        "Temperature": temperature,
+        "Humidity": humidity,
+        "Moisture": moisture,
+        "Rainfall" : rainfall
     }
 
 
@@ -114,7 +125,29 @@ def home():
     return {"message": "API is running!"}
 
 @app.post("/crop-prediction/")
-def crop_prediction(data: CropInput):
+async def crop_prediction(
+    file: UploadFile = File(...),
+    lat: float = Query(...),
+    lon: float = Query(...),):
+    content = await file.read()
+    soil_data = get_soil_data(content)
+    weather = get_weather((lat, lon))
+    #     N: float
+    # P: float
+    # K: float
+    # temperature: float
+    # humidity: float
+    # ph: float
+    # rainfall: float
+    data = {
+        "temperature": weather["Temperature"],
+        "humidity": weather["Humidity"],
+        "rainfall": weather["Rainfall"],
+        "N": soil_data["N"],
+        "P": soil_data["K"],
+        "K": soil_data["P"],
+        "ph" : soil_data["pH"]
+    }
     crop = predict_crop_from_input(data)
     return {"recommended_crop": crop}
 
