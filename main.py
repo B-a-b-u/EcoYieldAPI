@@ -48,7 +48,7 @@ def load_models():
     global crop_model, label_encoder, fertilizer_model, soil_encoder, crop_encoder
     with open("models/CropRecommendation.pkl", "rb") as f:
         crop_model = pickle.load(f)
-    with open("models/label_encoder.pkl", "rb") as f:
+    with open("encoders/label_encoder.pkl", "rb") as f:
         label_encoder = pickle.load(f)
     with open("models/FertilizerRecommendation.pkl", "rb") as f:
         fertilizer_model = pickle.load(f)
