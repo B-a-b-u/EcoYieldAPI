@@ -1,48 +1,38 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query
-from fastapi.responses import JSONResponse
+# ======= Top Level: Imports and Setup =======
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import base64
-import pandas
-import pdfplumber
-import uvicorn
-from PyPDF2 import PdfReader
-import pandas as pd
-import io
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import pdfplumber
+from PyPDF2 import PdfReader
 import numpy as np
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, MinMaxScaler
-import re
-from dotenv import load_dotenv 
+import pandas as pd
+import requests
 import pickle
 import os
-import requests
-import base64
+import re
+import io
+from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
 )
+
+crop_model = None
+label_encoder = None
+fertilizer_model = None
+soil_encoder = None
+crop_encoder = None
+
 fertilizer_map = {
-    0: "10-26-26",
-    1: "14-35-14",
-    2: "17-17-17",
-    3: "20-20",
-    4: "28-28",
-    5: "DAP",
-    6: "Urea",
+    0: "10-26-26", 1: "14-35-14", 2: "17-17-17",
+    3: "20-20", 4: "28-28", 5: "DAP", 6: "Urea",
 }
-
-class PDFRequest(BaseModel):
-    base64_pdf: str
-
 
 class CropInput(BaseModel):
     N: float
@@ -53,168 +43,113 @@ class CropInput(BaseModel):
     ph: float
     rainfall: float
 
+@app.on_event("startup")
+def load_models():
+    global crop_model, label_encoder, fertilizer_model, soil_encoder, crop_encoder
+    with open("models/CropRecommendation.pkl", "rb") as f:
+        crop_model = pickle.load(f)
+    with open("models/label_encoder.pkl", "rb") as f:
+        label_encoder = pickle.load(f)
+    with open("models/FertilizerRecommendation.pkl", "rb") as f:
+        fertilizer_model = pickle.load(f)
+    with open("encoders/soil_encoder_FR.pkl", "rb") as f:
+        soil_encoder = pickle.load(f)
+    with open("encoders/crop_encoder_FR.pkl", "rb") as f:
+        crop_encoder = pickle.load(f)
+
+
+def predict_crop_from_input(data: CropInput):
+    input_array = np.array([[data.N, data.P, data.K, data.temperature, data.humidity, data.ph, data.rainfall]])
+    prediction = crop_model.predict(input_array)
+    return label_encoder.inverse_transform(prediction)[0]
+
 def get_soil_data(content):
     pdf_file = io.BytesIO(content)
-    extracted_values = dict()
+    extracted = {}
     with pdfplumber.open(pdf_file) as file:
-      table = file.pages[0].extract_tables()[0]
-      text = file.pages[0].extract_text()
-      # print("Extracted Text:\n", text)
+        text = file.pages[0].extract_text()
+        table = file.pages[0].extract_tables()[0]
 
-      soil_type_match = re.search(r"Sample Description:\s*(.*) soil", text)
-      soil_type = soil_type_match.group(1).strip() if soil_type_match else "Not Found"
-      extracted_values['soil_type'] = soil_type
+        soil_type_match = re.search(r"Sample Description:\s*(.*) soil", text)
+        extracted['soil_type'] = soil_type_match.group(1).strip() if soil_type_match else "Unknown"
 
-    #   print("\nExtracted Soil Type:", soil_type)
-
-
-      # print(f"table : {table} tables : {len(table)} tablel[] : {table[0][:]}")
-      headers = table[0]
-      data = table[1:]
-      # print(f"headers : {headers} data : {data}")
-
-      for row in data:
-          parameter = row[1].strip()
-          value = float(row[3].strip())
-          if "pH" in parameter:
-              extracted_values["pH"] = value
-          elif "Available Nitrogen" in parameter:
-              extracted_values["N"] = value
-          elif "Available Phosphorus" in parameter:
-              extracted_values["P"] = value
-          elif "Available Potassium" in parameter:
-              extracted_values["K"] = value
-    # print("\nExtracted Soil Data:")
-    # print(f"pH: {extracted_values.get('pH', 'Not Found')}")
-    # print(f"Nitrogen (N): {extracted_values.get('Nitrogen (N)', 'Not Found')} ppm")
-    # print(f"Phosphorus (P): {extracted_values.get('Phosphorus (P)', 'Not Found')} ppm")
-    # print(f"Potassium (K): {extracted_values.get('Potassium (K)', 'Not Found')} ppm")
-    return extracted_values
+        for row in table[1:]:
+            param = row[1].strip()
+            value = float(row[3].strip())
+            if "pH" in param:
+                extracted["pH"] = value
+            elif "Nitrogen" in param:
+                extracted["N"] = value
+            elif "Phosphorus" in param:
+                extracted["P"] = value
+            elif "Potassium" in param:
+                extracted["K"] = value
+    return extracted
 
 
 def get_weather(location):
-    api_url = f"http://api.weatherapi.com/v1/forecast.json?key={os.getenv('WEATHER_MAP_API')}&q={location[0]},{location[1]}&days=1&aqi=no&alerts=no"
-    print(api_url)
-    response = requests.get(api_url)
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail="Error fetching weather data")
-    weather_data = response.json()
-    current_weather = weather_data.get('current', {})
-    temperature = current_weather.get('temp_c', None)
-    humidity = current_weather.get('humidity', None)
-    precipitation = current_weather.get('precip_mm', None)
-    data = {
-        'Temperature': temperature,
-        'Humidity': humidity,
-        'Moisture': precipitation
+    lat, lon = location
+    api_url = f"http://api.weatherapi.com/v1/forecast.json?key={os.getenv('WEATHER_MAP_API')}&q={lat},{lon}&days=1&aqi=no&alerts=no"
+    res = requests.get(api_url)
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code, detail="Weather API failed")
+    data = res.json()["current"]
+    return {
+        "Temperature": data["temp_c"],
+        "Humidity": data["humidity"],
+        "Moisture": data["precip_mm"]
     }
-    print(data)
-    return data
-
-# print(get_weather("Coimbatore"))
-
-def load_cr_model():
-  with open("models/CropRecommendation.pkl", "rb") as model_file:
-    model = pickle.load(model_file, fix_imports=True)
-  with open("models\label_encoder.pkl", "rb") as f:
-    label_encoder = pickle.load(f)
-    return (model, label_encoder)
 
 
-def preprocess_data(data):
+def preprocess_fertilizer_data(data):
     df = pd.DataFrame(data)
+    df["Soil Type"] = soil_encoder.transform(df["Soil Type"])
+    df["Crop Type"] = crop_encoder.transform(df["Crop Type"])
+
+    features = ["Temperature", "Humidity", "Moisture", "Nitrogen", "Potassium", "Phosphorous"]
+    return df[features + ["Soil Type", "Crop Type"]].values.astype(float)
+
+@app.get("/")
+def home():
+    return {"message": "API is running!"}
+
+@app.post("/crop-prediction/")
+def crop_prediction(data: CropInput):
+    crop = predict_crop_from_input(data)
+    return {"recommended_crop": crop}
 
 
-    with open("encoders/soil_encoder_FR.pkl", "rb") as file:
-        encode_soil = pickle.load(file)
+@app.post("/fertilizer-prediction/")
+async def fertilizer_prediction(
+    file: UploadFile = File(...),
+    lat: float = Query(...),
+    lon: float = Query(...),
+    crop_type: str = Query(...)
+):
+    content = await file.read()
+    soil_data = get_soil_data(content)
+    weather = get_weather((lat, lon))
 
-    with open("encoders/crop_encoder_FR.pkl", "rb") as file:
-        encode_crop = pickle.load(file)
+    data = {
+        "Temperature": [weather["Temperature"]],
+        "Humidity": [weather["Humidity"]],
+        "Moisture": [weather["Moisture"]],
+        "Soil Type": [soil_data["soil_type"]],
+        "Crop Type": [crop_type],
+        "Nitrogen": [soil_data["N"]],
+        "Potassium": [soil_data["K"]],
+        "Phosphorous": [soil_data["P"]],
+    }
 
-    df["Soil Type"] = encode_soil.transform(df["Soil Type"])
-    df["Crop Type"] = encode_crop.transform(df["Crop Type"])
-
-    numeric_features = ["Temperature", "Humidity", "Moisture", "Nitrogen", "Potassium", "Phosphorous"]
-
-    transformed_data = df[numeric_features + ["Soil Type", "Crop Type"]].values.astype(float)
-
-    print(f"Final Preprocessed Data:\n{transformed_data}")
-
-    return transformed_data
-
-def get_fertilizer_prediction(data):
-    with open("models/FertilizerRecommendation.pkl", "rb") as model_file:
-        model = pickle.load(model_file)
-        preprocessed_data = preprocess_data(data)
-        prediction = model.predict(preprocessed_data)
-        print("Recommended Fertilizer:", prediction[0])
-    return prediction[0]
-
+    processed = preprocess_fertilizer_data(data)
+    pred = fertilizer_model.predict(processed)[0]
+    return {"recommended_fertilizer": fertilizer_map[pred]}
 
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
     contents = await file.read()
-
-    # Save it temporarily
     with open("temp.pdf", "wb") as f:
         f.write(contents)
-
-    # Extract PDF text
     reader = PdfReader("temp.pdf")
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() or ""
-
-    return {"filename": file.filename, "content": text[:500]}  # Just return first 500 chars
-
-@app.get("/")
-def home():
-    return {"message": "As you can see, I'm Not Dead!"}
-
-
-@app.post("/crop-prediction")
-def predict_crop(data: CropInput):
-    model, label_encoder = load_cr_model()
-    input_array = np.array([[data.N, data.P, data.K, data.temperature, data.humidity, data.ph, data.rainfall]])
-    prediction = model.predict(input_array)
-    crop_name = label_encoder.inverse_transform(prediction)[0]
-    return {"recommended_crop": crop_name}
-
-@app.post("/fertilizer-prediction/")
-async def predict_fertilizer(
-    file : UploadFile = File(...),
-    lat: float = Query(..., description="Latitude of the location"),
-    lon: float = Query(..., description="Longitude of the location"),
-    crop_type: str = Query(..., description="Type of the crop")
-    ):
-
-    # print(f"file : {file} lat : {lat} lon: {lon} crop : {crop_type}")
-    content = await file.read()
-    soil_data = get_soil_data(content)
-    print(f"soil data: {soil_data}")
-
-    soil_type = soil_data["soil_type"]
-    n = soil_data["N"]
-    p = soil_data["P"]
-    k = soil_data["K"]
-
-    weather_data = get_weather([lat, lon])
-    t = weather_data['Temperature']
-    h = weather_data['Humidity']
-    m = weather_data['Moisture']
-
-    data = {
-    "Temperature": [t],
-    "Humidity": [h],
-    "Moisture": [m],
-    "Soil Type": [soil_type],
-    "Crop Type": [crop_type],
-    "Nitrogen": [n],
-    "Potassium": [k],
-    "Phosphorous": [p],
-    }
-    print(f"data : {data}")
-    # df = pd.DataFrame(data)
-    prediction = fertilizer_map[get_fertilizer_prediction(data)]
-    print("Prediction : ",prediction)
-    return JSONResponse(content={"Response": "Function completed","FR":prediction})
+    text = "".join([page.extract_text() or "" for page in reader.pages])
+    return {"filename": file.filename, "content": text[:500]}
