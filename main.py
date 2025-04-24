@@ -1,5 +1,5 @@
 # ======= Top Level: Imports and Setup =======
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ from PyPDF2 import PdfReader
 import numpy as np
 import pandas as pd
 import requests
+from base64 import b64decode
 import pickle
 import os
 import re
