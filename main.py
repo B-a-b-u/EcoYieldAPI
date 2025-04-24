@@ -178,6 +178,38 @@ async def fertilizer_prediction(
     pred = fertilizer_model.predict(processed)[0]
     return {"recommended_fertilizer": fertilizer_map[pred]}
 
+@app.post("/fertilizer-prediction-64/")
+async def fertilizer_prediction_base64(
+    base64_pdf: str = Body(...),
+    lat: float = Query(...),
+    lon: float = Query(...),
+    crop_type: str = Query(...)
+):
+    try:
+        if "," in base64_pdf:
+            base64_pdf = base64_pdf.split(",")[1]
+        pdf_bytes = b64decode(base64_pdf)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid base64 PDF string")
+
+    soil_data = get_soil_data(pdf_bytes)
+    weather = get_weather((lat, lon))
+
+    data = {
+        "Temperature": [weather["Temperature"]],
+        "Humidity": [weather["Humidity"]],
+        "Moisture": [weather["Moisture"]],
+        "Soil Type": [soil_data["soil_type"]],
+        "Crop Type": [crop_type],
+        "Nitrogen": [soil_data["N"]],
+        "Potassium": [soil_data["K"]],
+        "Phosphorous": [soil_data["P"]],
+    }
+
+    processed = preprocess_fertilizer_data(data)
+    pred = fertilizer_model.predict(processed)[0]
+    return {"recommended_fertilizer": fertilizer_map[pred]}
+
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
     contents = await file.read()
