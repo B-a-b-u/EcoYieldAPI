@@ -7,6 +7,7 @@ import pdfplumber
 from PyPDF2 import PdfReader
 import numpy as np
 import pandas as pd
+from PIL import Image
 import requests
 from base64 import b64decode
 import pickle
