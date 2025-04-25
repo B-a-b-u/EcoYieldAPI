@@ -11,7 +11,7 @@ fastapi==0.115.11
 h11==0.14.0
 idna==3.10
 joblib==1.4.2
-numpy==2.2.3
+numpy>=1.23.5,<2.0
 pandas==2.2.3
 pdfminer.six==20231228
 pdfplumber==0.11.5
@@ -36,3 +36,7 @@ typing_extensions==4.12.2
 tzdata==2025.1
 urllib3==2.3.0
 uvicorn==0.34.0
+keras==3.3.3
+tensorboard==2.16.2
+tensorboard-data-server==0.7.2
+tensorflow==2.16.1
