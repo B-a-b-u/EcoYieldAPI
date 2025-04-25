@@ -14,6 +14,7 @@ import os
 import re
 import io
 from dotenv import load_dotenv
+import tensorflow as tf
 
 load_dotenv()
 
@@ -34,6 +35,48 @@ fertilizer_map = {
     0: "10-26-26", 1: "14-35-14", 2: "17-17-17",
     3: "20-20", 4: "28-28", 5: "DAP", 6: "Urea",
 }
+
+nd_class_labels = [
+    "Apple___Apple_scab",
+    "Apple___Black_rot",
+    "Apple___Cedar_apple_rust",
+    "Apple___healthy",
+    "Blueberry___healthy",
+    "Cherry_(including_sour)___Powdery_mildew",
+    "Cherry_(including_sour)___healthy",
+    "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot",
+    "Corn_(maize)___Common_rust_",
+    "Corn_(maize)___Northern_Leaf_Blight",
+    "Corn_(maize)___healthy",
+    "Grape___Black_rot",
+    "Grape___Esca_(Black_Measles)",
+    "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)",
+    "Grape___healthy",
+    "Orange___Haunglongbing_(Citrus_greening)",
+    "Peach___Bacterial_spot",
+    "Peach___healthy",
+    "Pepper,_bell___Bacterial_spot",
+    "Pepper,_bell___healthy",
+    "Potato___Early_blight",
+    "Potato___Late_blight",
+    "Potato___healthy",
+    "Raspberry___healthy",
+    "Soybean___healthy",
+    "Squash___Powdery_mildew",
+    "Strawberry___Leaf_scorch",
+    "Strawberry___healthy",
+    "Tomato___Bacterial_spot",
+    "Tomato___Early_blight",
+    "Tomato___Late_blight",
+    "Tomato___Leaf_Mold",
+    "Tomato___Septoria_leaf_spot",
+    "Tomato___Spider_mites Two-spotted_spider_mite",
+    "Tomato___Target_Spot",
+    "Tomato___Tomato_Yellow_Leaf_Curl_Virus",
+    "Tomato___Tomato_mosaic_virus",
+    "Tomato___healthy"
+]
+
 
 # class CropInput(BaseModel):
 #     N: float
@@ -57,6 +100,10 @@ def load_models():
         soil_encoder = pickle.load(f)
     with open("encoders/crop_encoder_FR.pkl", "rb") as f:
         crop_encoder = pickle.load(f)
+    tflite_interpreter = tf.lite.Interpreter(model_path="models/nutrients-deficiency.tflite")
+    tflite_interpreter.allocate_tensors()
+    tflite_input_details = tflite_interpreter.get_input_details()
+    tflite_output_details = tflite_interpreter.get_output_details()
 
 
 def predict_crop_from_input(data):
@@ -219,3 +266,29 @@ async def upload_pdf(file: UploadFile = File(...)):
     reader = PdfReader("temp.pdf")
     text = "".join([page.extract_text() or "" for page in reader.pages])
     return {"filename": file.filename, "content": text[:500]}
+
+@app.post("/predict-nutrient-deficiency/")
+async def predict_nutrient_deficiency(image_data: dict = Body(...)):
+    try:
+        image_base64 = image_data.get("image")
+        if not image_base64:
+            raise HTTPException(status_code=400, detail="Image data not provided")
+        image_bytes = b64decode(image_base64)
+        image = Image.open(BytesIO(image_bytes)).resize((224, 224))
+        image = np.array(Image.open(BytesIO(image_bytes)))
+        img_array = np.array(image).astype(np.float32) / 255.0
+        img_array = img_array.reshape(1, target_size[0], target_size[1], 1)  
+        
+        tflite_interpreter.set_tensor(tflite_input_details[0]['index'], img_array)
+        tflite_interpreter.invoke()
+        output = tflite_interpreter.get_tensor(tflite_output_details[0]['index'])
+        predicted_class = int(np.argmax(output))
+        confidence = float(np.max(output))
+
+        return {
+            "predicted_class_index": predicted_class,
+            "predicted_class_label": nd_class_labels[predicted_class],
+            "confidence": round(confidence * 100, 2)
+        }
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
