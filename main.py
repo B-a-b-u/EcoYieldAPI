@@ -31,6 +31,10 @@ label_encoder = None
 fertilizer_model = None
 soil_encoder = None
 crop_encoder = None
+tflite_interpreter = None
+tflite_input_details = None
+tflite_output_details = None
+
 
 fertilizer_map = {
     0: "10-26-26", 1: "14-35-14", 2: "17-17-17",
