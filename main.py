@@ -283,6 +283,12 @@ async def predict_nutrient_deficiency(image_data: dict = Body(...)):
         image = Image.open(io.BytesIO(image_bytes)).convert('L').resize((224, 224))
         img_array = np.array(image).astype(np.float32) / 255.0
         img_array = img_array.reshape(1, 224, 224, 1)
+
+
+        tflite_interpreter = tf.lite.Interpreter(model_path="models/nutrients-deficiency.tflite")
+        tflite_interpreter.allocate_tensors()
+        tflite_input_details = tflite_interpreter.get_input_details()
+        tflite_output_details = tflite_interpreter.get_output_details()
         
         tflite_interpreter.set_tensor(tflite_input_details[0]['index'], img_array)
         tflite_interpreter.invoke()
