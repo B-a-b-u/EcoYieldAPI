@@ -274,11 +274,11 @@ async def predict_nutrient_deficiency(image_data: dict = Body(...)):
         image_base64 = image_data.get("image")
         if not image_base64:
             raise HTTPException(status_code=400, detail="Image data not provided")
+            
         image_bytes = b64decode(image_base64)
-        image = Image.open(io.BytesIO(image_bytes)).resize((224, 224))
-        image = np.array(Image.open(io.BytesIO(image_bytes)))
+        image = Image.open(io.BytesIO(image_bytes)).convert('L').resize((224, 224))
         img_array = np.array(image).astype(np.float32) / 255.0
-        img_array = img_array.reshape(1, 224 ,224, 1)  
+        img_array = img_array.reshape(1, 224, 224, 1)
         
         tflite_interpreter.set_tensor(tflite_input_details[0]['index'], img_array)
         tflite_interpreter.invoke()
