@@ -37,50 +37,75 @@ tflite_output_details = None
 
 
 fertilizer_map = {
-    0: "10-26-26", 1: "14-35-14", 2: "17-17-17",
-    3: "20-20", 4: "28-28", 5: "DAP", 6: "Urea",
+    0: "10-26-26", 
+    1: "14-35-14", 
+    2: "17-17-17",
+    3: "20-20",
+    4: "28-28",
+    5: "DAP",
+    6: "Urea",
 }
 
+recommended_npk = {
+        "Maize": {"N": 135, "P": 62.5, "K": 50},
+        "Sugarcane": {"N": 300, "P": 100, "K": 200},
+        "Cotton": {"N": 100, "P": 50, "K": 50},
+        "Paddy": {"N": 100, "P": 50, "K": 50},
+        "Wheat": {"N": 120, "P": 60, "K": 40},
+    }
+
+fertilizer_nutrient_content = {
+    "Urea": {"N": 46},
+    "DAP": {"N": 18, "P": 46},
+    "10-26-26": {"N": 10, "P": 26, "K": 26},
+    "14-35-14": {"N": 14, "P": 35, "K": 14},
+    "17-17-17": {"N": 17, "P": 17, "K": 17},
+    "20-20": {"N": 20, "P": 20},
+    "28-28": {"N": 28, "P": 28}
+}
+
+
 nd_class_labels = [
-    "Apple___Apple_scab",
-    "Apple___Black_rot",
-    "Apple___Cedar_apple_rust",
-    "Apple___healthy",
-    "Blueberry___healthy",
-    "Cherry_(including_sour)___Powdery_mildew",
-    "Cherry_(including_sour)___healthy",
-    "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot",
-    "Corn_(maize)___Common_rust_",
-    "Corn_(maize)___Northern_Leaf_Blight",
-    "Corn_(maize)___healthy",
-    "Grape___Black_rot",
-    "Grape___Esca_(Black_Measles)",
-    "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)",
-    "Grape___healthy",
-    "Orange___Haunglongbing_(Citrus_greening)",
-    "Peach___Bacterial_spot",
-    "Peach___healthy",
-    "Pepper,_bell___Bacterial_spot",
-    "Pepper,_bell___healthy",
-    "Potato___Early_blight",
-    "Potato___Late_blight",
-    "Potato___healthy",
-    "Raspberry___healthy",
-    "Soybean___healthy",
-    "Squash___Powdery_mildew",
-    "Strawberry___Leaf_scorch",
-    "Strawberry___healthy",
-    "Tomato___Bacterial_spot",
-    "Tomato___Early_blight",
-    "Tomato___Late_blight",
-    "Tomato___Leaf_Mold",
-    "Tomato___Septoria_leaf_spot",
-    "Tomato___Spider_mites Two-spotted_spider_mite",
-    "Tomato___Target_Spot",
-    "Tomato___Tomato_Yellow_Leaf_Curl_Virus",
-    "Tomato___Tomato_mosaic_virus",
-    "Tomato___healthy"
+    "The Apple plant is likely affected by Apple Scab.",
+    "The Apple plant is likely affected by Black Rot.",
+    "The Apple plant is likely affected by Cedar Apple Rust.",
+    "The Apple plant appears to be healthy.",
+    "The Blueberry plant appears to be healthy.",
+    "The Cherry (including sour) plant is likely affected by Powdery Mildew.",
+    "The Cherry (including sour) plant appears to be healthy.",
+    "The Corn (maize) plant is likely affected by Cercospora Leaf Spot and Gray Leaf Spot.",
+    "The Corn (maize) plant is likely affected by Common Rust.",
+    "The Corn (maize) plant is likely affected by Northern Leaf Blight.",
+    "The Corn (maize) plant appears to be healthy.",
+    "The Grape plant is likely affected by Black Rot.",
+    "The Grape plant is likely affected by Esca (Black Measles).",
+    "The Grape plant is likely affected by Leaf Blight (Isariopsis Leaf Spot).",
+    "The Grape plant appears to be healthy.",
+    "The Orange plant is likely affected by Huanglongbing (Citrus Greening).",
+    "The Peach plant is likely affected by Bacterial Spot.",
+    "The Peach plant appears to be healthy.",
+    "The Bell Pepper plant is likely affected by Bacterial Spot.",
+    "The Bell Pepper plant appears to be healthy.",
+    "The Potato plant is likely affected by Early Blight.",
+    "The Potato plant is likely affected by Late Blight.",
+    "The Potato plant appears to be healthy.",
+    "The Raspberry plant appears to be healthy.",
+    "The Soybean plant appears to be healthy.",
+    "The Squash plant is likely affected by Powdery Mildew.",
+    "The Strawberry plant is likely affected by Leaf Scorch.",
+    "The Strawberry plant appears to be healthy.",
+    "The Tomato plant is likely affected by Bacterial Spot.",
+    "The Tomato plant is likely affected by Early Blight.",
+    "The Tomato plant is likely affected by Late Blight.",
+    "The Tomato plant is likely affected by Leaf Mold.",
+    "The Tomato plant is likely affected by Septoria Leaf Spot.",
+    "The Tomato plant is likely affected by Spider Mites (Two-Spotted Spider Mite).",
+    "The Tomato plant is likely affected by Target Spot.",
+    "The Tomato plant is likely affected by Tomato Yellow Leaf Curl Virus.",
+    "The Tomato plant is likely affected by Tomato Mosaic Virus.",
+    "The Tomato plant appears to be healthy."
 ]
+
 
 
 # class CropInput(BaseModel):
@@ -173,6 +198,33 @@ def preprocess_fertilizer_data(data):
     features = ["Temperature", "Humidity", "Moisture", "Nitrogen", "Potassium", "Phosphorous"]
     return df[features + ["Soil Type", "Crop Type"]].values.astype(float)
 
+def calculate_optimal_fertilizer_usage(fertilizer_name, area_ha, crop_type):
+    if fertilizer_name not in fertilizer_nutrient_content:
+        raise ValueError(f"Unknown fertilizer: {fertilizer_name}")
+
+    required = recommended_npk.get(crop_type)
+    if not required:
+        raise ValueError(f"Crop type '{crop_type}' is not recognized.")
+
+    deficits = {
+        nutrient: max(required[nutrient] - current_nutrients.get(nutrient, 0), 0)
+        for nutrient in ["N", "P", "K"]
+    }
+    
+    fert_content = fertilizer_nutrient_content[fertilizer_name]
+    fert_needed = []
+
+    for nutrient, deficit_value in nutrient_deficit.items():
+        if nutrient in fert_content and deficit_value > 0:
+            percent = fert_content[nutrient]
+            kg_needed = (deficit_value * 100 / percent) * area_ha
+            fert_needed.append(kg_needed)
+
+    if not fert_needed:
+        return 0.0  # No nutrient is being provided by this fertilizer
+
+    return round(max(fert_needed), 2)
+
 @app.get("/")
 def home():
     return {"message": "API is running!"}
@@ -203,6 +255,7 @@ async def crop_prediction(
     }
     crop = predict_crop_from_input(data)
     return {"recommended_crop": crop}
+        
 
 
 @app.post("/fertilizer-prediction/")
@@ -229,7 +282,8 @@ async def fertilizer_prediction(
 
     processed = preprocess_fertilizer_data(data)
     pred = fertilizer_model.predict(processed)[0]
-    return {"recommended_fertilizer": fertilizer_map[pred]}
+    quantity = calculate_optimal_fertilizer_usage(fertilizer_map[pred],crop_type)
+    return {"recommended_fertilizer": fertilizer_map[pred], "optimal_quantity" : quantity}
 
 @app.post("/fertilizer-prediction-64/")
 async def fertilizer_prediction_base64(
@@ -261,7 +315,8 @@ async def fertilizer_prediction_base64(
 
     processed = preprocess_fertilizer_data(data)
     pred = fertilizer_model.predict(processed)[0]
-    return {"recommended_fertilizer": fertilizer_map[pred]}
+    quantity = calculate_optimal_fertilizer_usage(fertilizer_map[pred],crop_type)
+    return {"recommended_fertilizer": fertilizer_map[pred], "optimal_quantity" : quantity}
 
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
