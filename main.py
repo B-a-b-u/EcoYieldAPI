@@ -198,7 +198,8 @@ def preprocess_fertilizer_data(data):
     features = ["Temperature", "Humidity", "Moisture", "Nitrogen", "Potassium", "Phosphorous"]
     return df[features + ["Soil Type", "Crop Type"]].values.astype(float)
 
-def calculate_optimal_fertilizer_usage(fertilizer_name, area_ha = 1.0, crop_type):
+def calculate_optimal_fertilizer_usage(fertilizer_name, crop_type):
+    area_ha = 1.0
     if fertilizer_name not in fertilizer_nutrient_content:
         raise ValueError(f"Unknown fertilizer: {fertilizer_name}")
 
@@ -221,7 +222,7 @@ def calculate_optimal_fertilizer_usage(fertilizer_name, area_ha = 1.0, crop_type
             fert_needed.append(kg_needed)
 
     if not fert_needed:
-        return 0.0  # No nutrient is being provided by this fertilizer
+        return 0.0 
 
     return round(max(fert_needed), 2)
 
