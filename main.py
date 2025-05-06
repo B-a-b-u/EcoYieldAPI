@@ -198,7 +198,7 @@ def preprocess_fertilizer_data(data):
     features = ["Temperature", "Humidity", "Moisture", "Nitrogen", "Potassium", "Phosphorous"]
     return df[features + ["Soil Type", "Crop Type"]].values.astype(float)
 
-def calculate_optimal_fertilizer_usage(fertilizer_name, crop_type):
+def calculate_optimal_fertilizer_usage(fertilizer_name, crop_type, current_nutrients):
     area_ha = 1.0
     if fertilizer_name not in fertilizer_nutrient_content:
         raise ValueError(f"Unknown fertilizer: {fertilizer_name}")
@@ -207,11 +207,11 @@ def calculate_optimal_fertilizer_usage(fertilizer_name, crop_type):
     if not required:
         raise ValueError(f"Crop type '{crop_type}' is not recognized.")
 
-    deficits = {
+    nutrient_deficit = {
         nutrient: max(required[nutrient] - current_nutrients.get(nutrient, 0), 0)
         for nutrient in ["N", "P", "K"]
     }
-    
+
     fert_content = fertilizer_nutrient_content[fertilizer_name]
     fert_needed = []
 
@@ -222,9 +222,10 @@ def calculate_optimal_fertilizer_usage(fertilizer_name, crop_type):
             fert_needed.append(kg_needed)
 
     if not fert_needed:
-        return 0.0 
+        return 0.0
 
     return round(max(fert_needed), 2)
+
 
 @app.get("/")
 def home():
@@ -283,7 +284,15 @@ async def fertilizer_prediction(
 
     processed = preprocess_fertilizer_data(data)
     pred = fertilizer_model.predict(processed)[0]
-    quantity = calculate_optimal_fertilizer_usage(fertilizer_name = fertilizer_map[pred],crop_type = crop_type)
+    quantity = calculate_optimal_fertilizer_usage(
+    fertilizer_name = fertilizer_map[pred],
+    crop_type = crop_type,
+    current_nutrients = {
+        "N": soil_data["N"],
+        "P": soil_data["P"],
+        "K": soil_data["K"]
+    }
+)
     return {"recommended_fertilizer": fertilizer_map[pred], "optimal_quantity" : quantity}
 
 @app.post("/fertilizer-prediction-64/")
@@ -316,8 +325,17 @@ async def fertilizer_prediction_base64(
 
     processed = preprocess_fertilizer_data(data)
     pred = fertilizer_model.predict(processed)[0]
-    quantity = calculate_optimal_fertilizer_usage(fertilizer_map[pred],crop_type)
+    quantity = calculate_optimal_fertilizer_usage(
+    fertilizer_name = fertilizer_map[pred],
+    crop_type = crop_type,
+    current_nutrients = {
+        "N": soil_data["N"],
+        "P": soil_data["P"],
+        "K": soil_data["K"]
+    }
+    )
     return {"recommended_fertilizer": fertilizer_map[pred], "optimal_quantity" : quantity}
+
 
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
