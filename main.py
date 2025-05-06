@@ -282,7 +282,7 @@ async def fertilizer_prediction(
 
     processed = preprocess_fertilizer_data(data)
     pred = fertilizer_model.predict(processed)[0]
-    quantity = calculate_optimal_fertilizer_usage(fertilizer_map[pred],crop_type)
+    quantity = calculate_optimal_fertilizer_usage(fertilizer_name = fertilizer_map[pred],crop_type = crop_type)
     return {"recommended_fertilizer": fertilizer_map[pred], "optimal_quantity" : quantity}
 
 @app.post("/fertilizer-prediction-64/")
